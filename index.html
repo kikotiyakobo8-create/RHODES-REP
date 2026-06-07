@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Supermarket Management System</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+</head>
+<body class="bg-gray-100 font-sans antialiased">
+
+    <nav class="bg-blue-600 text-white p-4 shadow-md flex justify-between items-center">
+        <h1 class="text-xl font-bold">🛒 FreshMart POS & Inventory</h1>
+        <div class="space-x-4">
+            <button id="nav-admin" onclick="switchView('admin')" class="bg-blue-700 hover:bg-blue-800 px-4 py-2 rounded font-semibold transition">Admin Portal</button>
+            <button id="nav-cashier" onclick="switchView('cashier')" class="bg-green-600 hover:bg-green-700 px-4 py-2 rounded font-semibold transition">Cashier (POS)</button>
+        </div>
+    </nav>
+
+    <main class="container mx-auto p-6">
+
+        <section id="admin-view" class="space-y-6">
+            <div class="flex justify-between items-center">
+                <h2 class="text-2xl font-bold text-gray-800">Admin Dashboard - Product Management</h2>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div class="bg-white p-6 rounded-lg shadow-md h-fit">
+                    <h3 class="text-lg font-bold mb-4 text-gray-700">Add New Product</h3>
+                    <form id="product-form" onsubmit="addProduct(event)" class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-600">Product Name</label>
+                            <input type="text" id="prod-name" required class="w-full mt-1 p-2 border rounded focus:outline-blue-500">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-600">Barcode / SKU</label>
+                            <input type="text" id="prod-barcode" required class="w-full mt-1 p-2 border rounded focus:outline-blue-500">
+                        </div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-600">Price ($)</label>
+                                <input type="number" id="prod-price" step="0.01" required class="w-full mt-1 p-2 border rounded focus:outline-blue-500">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-600">Stock Qty</label>
+                                <input type="number" id="prod-stock" required class="w-full mt-1 p-2 border rounded focus:outline-blue-500">
+                            </div>
+                        </div>
+                        <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded transition">
+                            Add Product
+                        </button>
+                    </form>
+                </div>
+
+                <div class="bg-white p-6 rounded-lg shadow-md lg:col-span-2">
+                    <h3 class="text-lg font-bold mb-4 text-gray-700">Current Stock Inventory</h3>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                                <tr class="bg-gray-100 text-gray-600 uppercase text-sm border-b">
+                                    <th class="p-3">Barcode</th>
+                                    <th class="p-3">Name</th>
+                                    <th class="p-3 text-right">Price</th>
+                                    <th class="p-3 text-right">Stock</th>
+                                </tr>
+                            </thead>
+                            <tbody id="inventory-table-body" class="text-gray-700 divide-y">
+                                </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+
+        <section id="cashier-view" class="hidden space-y-6">
+            <h2 class="text-2xl font-bold text-gray-800">Cashier Point of Sale (POS)</h2>
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div class="bg-white p-6 rounded-lg shadow-md lg:col-span-2">
+                    <h3 class="text-lg font-bold mb-4 text-gray-700">Click Product to Scan/Add</h3>
+                    <div id="pos-products-grid" class="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                        </div>
+                </div>
+
+                <div class="bg-white p-6 rounded-lg shadow-md flex flex-col justify-between min-h-[400px]">
+                    <div>
+                        <h3 class="text-lg font-bold mb-4 text-gray-700">Current Cart</h3>
+                        <div class="overflow-y-auto max-h-64 divide-y" id="cart-items">
+                            <p id="empty-cart-msg" class="text-gray-400 text-center py-8">Cart is empty</p>
+                        </div>
+                    </div>
+
+                    <div class="border-t pt-4 mt-4 space-y-4">
+                        <div class="flex justify-between text-xl font-bold text-gray-800">
+                            <span>Total Amount:</span>
+                            <span id="cart-total">$0.00</span>
+                        </div>
+                        <button onclick="checkout()" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded shadow transition text-center block">
+                            Complete Checkout & Pay
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <script>
+        // Mock Database Initialization
+        let products = [
+            { id: 1, barcode: "1001", name: "Fresh Milk 1L", price: 2.99, stock: 50 },
+            { id: 2, barcode: "1002", name: "Whole Grain Bread", price: 3.49, stock: 30 },
+            { id: 3, barcode: "1003", name: "Organic Eggs (12pk)", price: 4.99, stock: 15 }
+        ];
+
+        let cart = [];
+
+        // View Switching Logic
+        function switchView(view) {
+            const adminView = document.getElementById('admin-view');
+            const cashierView = document.getElementById('cashier-view');
+            
+            if (view === 'admin') {
+                adminView.classList.remove('hidden');
+                cashierView.classList.add('hidden');
+            } else {
+                adminView.classList.add('hidden');
+                cashierView.classList.remove('hidden');
+                renderPOSProducts(); // Refresh items in POS grid
+            }
+        }
+
+        // --- ADMIN CONTROLLERS ---
+        function renderInventory() {
+            const tableBody = document.getElementById('inventory-table-body');
+            tableBody.innerHTML = '';
+
+            products.forEach(product => {
+                const row = `
+                    <tr class="hover:bg-gray-50">
+                        <td class="p-3 font-mono text-sm text-gray-500">${product.barcode}</td>
+                        <td class="p-3 font-semibold">${product.name}</td>
+                        <td class="p-3 text-right">$${product.price.toFixed(2)}</td>
+                        <td class="p-3 text-right">
+                            <span class="px-2 py-1 rounded text-xs font-bold ${product.stock <= 5 ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}">
+                                ${product.stock} units
+                            </span>
+                        </td>
+                    </tr>
+                `;
+                tableBody.insertAdjacentHTML('beforeend', row);
+            });
+        }
+
+        function addProduct(event) {
+            event.preventDefault();
+            
+            const name = document.getElementById('prod-name').value;
+            const barcode = document.getElementById('prod-barcode').value;
+            const price = parseFloat(document.getElementById('prod-price').value);
+            const stock = parseInt(document.getElementById('prod-stock').value);
+
+            const newProduct = {
+                id: Date.now(), // simple unique identifier
+                barcode,
+                name,
+                price,
+                stock
+            };
+
+            products.push(newProduct);
+            renderInventory();
+            
+            // Reset fields
+            document.getElementById('product-form').reset();
+            alert(`${name} added successfully to inventory!`);
+        }
+
+        // --- CASHIER CONTROLLERS ---
+        function renderPOSProducts() {
+            const grid = document.getElementById('pos-products-grid');
+            grid.innerHTML = '';
+
+            products.forEach(product => {
+                const card = `
+                    <button onclick="addToCart(${product.id})" class="p-4 bg-gray-50 border rounded-lg shadow-sm text-left hover:border-blue-500 transition focus:outline-none group">
+                        <p class="text-xs text-gray-400 font-mono">#${product.barcode}</p>
+                        <h4 class="font-bold text-gray-800 group-hover:text-blue-600">${product.name}</h4>
+                        <div class="flex justify-between items-center mt-2">
+                            <span class="text-green-600 font-bold">$${product.price.toFixed(2)}</span>
+                            <span class="text-xs text-gray-500">Stock: ${product.stock}</span>
+                        </div>
+                    </button>
+                `;
+                grid.insertAdjacentHTML('beforeend', card);
+            });
+        }
+
+        function addToCart(productId) {
+            const product = products.find(p => p.id === productId);
+            
+            if (!product || product.stock <= 0) {
+                alert("Out of stock!");
+                return;
+            }
+
+            const cartItem = cart.find(item => item.id === productId);
+
+            if (cartItem) {
+                if (cartItem.quantity >= product.stock) {
+                    alert("Cannot add more. Insufficient stock!");
+                    return;
+                }
+                cartItem.quantity++;
+            } else {
+                cart.push({ ...product, quantity: 1 });
+            }
+
+            renderCart();
+        }
+
+        function renderCart() {
+            const cartContainer = document.getElementById('cart-items');
+            const emptyMsg = document.getElementById('empty-cart-msg');
+            const totalElement = document.getElementById('cart-total');
+            
+            cartContainer.innerHTML = '';
+            
+            if (cart.length === 0) {
+                cartContainer.appendChild(emptyMsg);
+                totalElement.innerText = '$0.00';
+                return;
+            }
+
+            let total = 0;
+
+            cart.forEach(item => {
+                const itemTotal = item.price * item.quantity;
+                total += itemTotal;
+
+                const itemRow = `
+                    <div class="flex justify-between items-center py-3">
+                        <div>
+                            <p class="font-semibold text-gray-800">${item.name}</p>
+                            <p class="text-xs text-gray-500">$${item.price.toFixed(2)} x ${item.quantity}</p>
+                        </div>
+                        <span class="font-bold text-gray-700">$${itemTotal.toFixed(2)}</span>
+                    </div>
+                `;
+                cartContainer.insertAdjacentHTML('beforeend', itemRow);
+            });
+
+            totalElement.innerText = `$${total.toFixed(2)}`;
+        }
+
+        function checkout() {
+            if (cart.length === 0) {
+                alert("Cart is empty!");
+                return;
+            }
+
+            // Deduct stock from the mock database 
+            cart.forEach(cartItem => {
+                const targetProduct = products.find(p => p.id === cartItem.id);
+                if (targetProduct) {
+                    targetProduct.stock -= cartItem.quantity;
+                }
+            });
+
+            alert("Transaction Complete! Stock updated.");
+            cart = []; // clear cart
+            renderCart();
+            renderPOSProducts();
+            renderInventory();
+        }
+
+        // App Initial Startup Load
+        window.onload = () => {
+            renderInventory();
+        };
+    </script>
+</body>
+</html>
