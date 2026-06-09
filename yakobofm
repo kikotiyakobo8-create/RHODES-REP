@@ -1,0 +1,222 @@
+import tkinter as tk
+from tkinter import messagebox, ttk
+import mysql.connector
+from mysql.connector import Error
+
+# --- DIRECT MYSQL CONNECTION CONFIGURATION ---
+db_config = {
+    'host': 'localhost',
+    'user': 'yakobouser',         
+    'password': 'yakobopass',     
+    'database': 'yakobo_db'       
+}
+
+# Reference handle to cleanly toggle main application states
+root = None
+
+# ==========================================
+# WINDOW 2: USER PROFILE DASHBOARD
+# ==========================================
+class DashboardWindow:
+    def __init__(self, user_data):
+        self.window = tk.Tk()
+        self.window.title(f"Logged In: {user_data['username']}")
+        self.window.geometry("500x400")
+        self.window.resizable(False, False)
+        self.window.config(bg="#f4f6f9")
+
+        # Profile Display Box
+        card = tk.Frame(self.window, bg="white", highlightbackground="#dcdcdc", highlightthickness=1)
+        card.pack(padx=40, pady=40, fill="both", expand=True)
+
+        # Welcome Text
+        welcome_lbl = tk.Label(
+            card, 
+            text=f"Welcome, {user_data['full_name']}!", 
+            font=("Arial", 14, "bold"), 
+            bg="white", fg="#2c3e50"
+        )
+        welcome_lbl.pack(pady=20)
+
+        # Helper function to render profile rows beautifully
+        def add_profile_field(label, value):
+            row_frame = tk.Frame(card, bg="white")
+            row_frame.pack(anchor="w", padx=50, pady=6)
+            
+            lbl_tag = tk.Label(row_frame, text=label, font=("Arial", 10, "bold"), bg="white", fg="#7f8c8d", width=12, anchor="w")
+            lbl_tag.pack(side=tk.LEFT)
+            
+            lbl_val = tk.Label(row_frame, text=value if value else "Not Configured", font=("Arial", 10), bg="white", fg="#2c3e50")
+            lbl_val.pack(side=tk.LEFT)
+
+        # Display user variables retrieved live from the database
+        add_profile_field("Username:", user_data['username'])
+        add_profile_field("Country:", user_data['country'])
+        add_profile_field("Phone No:", user_data['phone_number'])
+
+        # --- THE LOGOUT BUTTON ---
+        logout_btn = tk.Button(
+            card, 
+            text="🚪 Log Out Session", 
+            font=("Arial", 10, "bold"), 
+            bg="#e74c3c", fg="white", 
+            activebackground="#c0392b", activeforeground="white",
+            padx=15, pady=8, bd=0, cursor="hand2",
+            command=self.logout_action
+        )
+        logout_btn.pack(pady=30)
+
+        self.window.mainloop()
+
+    def logout_action(self):
+        """Destroys the current dashboard workspace and drops back to primary sign-in panel"""
+        messagebox.showinfo("Session Ended", "You have been logged out successfully.")
+        self.window.destroy() 
+        create_auth_window()   
+
+
+# ==========================================
+# WINDOW 1: CORE PORTAL (LOGIN & REGISTRATION)
+# ==========================================
+def validate_login(login_username_entry, login_password_entry):
+    global root
+    username = login_username_entry.get().strip()
+    password = login_password_entry.get().strip()
+
+    if not username or not password:
+        messagebox.showwarning("Input Error", "Please provide a valid username and password.")
+        return
+
+    try:
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor(dictionary=True) 
+        
+        query = "SELECT * FROM users WHERE username = %s AND password = %s"
+        cursor.execute(query, (username, password))
+        user = cursor.fetchone()
+        
+        if user:
+            root.destroy()  # Shut down the access validation layout portal window
+            DashboardWindow(user)  # Switch instantly over to active profile dashboard loop
+        else:
+            messagebox.showerror("Login Failed", "Invalid username or password configuration.")
+            
+    except Error as e:
+        messagebox.showerror("Database Connection Error", f"Database lookup failure: {e}")
+    finally:
+        if 'conn' in locals() and conn.is_connected():
+            cursor.close()
+            conn.close()
+
+def register_user(reg_username_entry, reg_password_entry, reg_fullname_entry, reg_country_entry, reg_phone_entry, user_tree):
+    username = reg_username_entry.get().strip()
+    password = reg_password_entry.get().strip()
+    fullname = reg_fullname_entry.get().strip()
+    country = reg_country_entry.get().strip()
+    phone = reg_phone_entry.get().strip()
+
+    if not username or not password or not fullname:
+        messagebox.showwarning("Input Error", "Fields marked with (*) are required!")
+        return
+
+    try:
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor()
+        
+        query = """
+            INSERT INTO users (username, password, full_name, country, phone_number)
+            VALUES (%s, %s, %s, %s, %s)
+        """
+        cursor.execute(query, (username, password, fullname, country, phone))
+        conn.commit()
+        messagebox.showinfo("Success", "Registration Successful! Account created.")
+        
+        # UI cleaning
+        reg_username_entry.delete(0, tk.END)
+        reg_password_entry.delete(0, tk.END)
+        reg_fullname_entry.delete(0, tk.END)
+        reg_country_entry.delete(0, tk.END)
+        reg_phone_entry.delete(0, tk.END)
+        
+        load_table_data(user_tree)
+        
+    except mysql.connector.IntegrityError:
+        messagebox.showerror("Conflict", "Username is already registered in the system.")
+    except Error as e:
+        messagebox.showerror("Database Error", f"Transaction failure: {e}")
+    finally:
+        if 'conn' in locals() and conn.is_connected():
+            cursor.close()
+            conn.close()
+
+def load_table_data(user_tree):
+    """Refreshes structural layout items matching current active row arrays inside MySQL"""
+    for row in user_tree.get_children():
+        user_tree.delete(row)
+
+    try:
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT id, username, full_name, country, phone_number FROM users ORDER BY id DESC")
+        rows = cursor.fetchall()
+        
+        for user in rows:
+            user_tree.insert('', tk.END, values=(
+                user['id'],
+                user['username'],
+                user['full_name'],
+                user['country'] if user['country'] else "—",
+                user['phone_number'] if user['phone_number'] else "—"
+            ))
+    except Error as e:
+        print(f"Background parsing failure: {e}")
+    finally:
+        if 'conn' in locals() and conn.is_connected():
+            cursor.close()
+            conn.close()
+
+
+def create_auth_window():
+    """Builds or reconstructs the primary Authentication/Registration Window"""
+    global root
+    
+    root = tk.Tk()
+    root.title("Yakobo Central System")
+    root.geometry("800x750")
+    root.resizable(False, False)
+
+    # Style setups to guarantee clean tree rendering columns
+    style = ttk.Style()
+    style.theme_use("clam")
+    style.configure("TNotebook.Tab", font=("Arial", 11, "bold"), padding=[10, 5])
+    style.configure("Treeview", font=("Arial", 11), rowheight=28, background="white", fieldbackground="white")
+    style.configure("Treeview.Heading", font=("Arial", 11, "bold"), background="#e1e1e1")
+
+    notebook = ttk.Notebook(root)
+    notebook.pack(expand=True, fill="both", padx=10, pady=10)
+
+    login_tab = tk.Frame(notebook, bg="#f0f0f0")
+    register_tab = tk.Frame(notebook, bg="#f0f0f0")
+
+    notebook.add(login_tab, text="  Account Login  ")
+    notebook.add(register_tab, text="  Registration & Live Database  ")
+
+    # --- 1. LOGIN TAB VIEW ---
+    login_title = tk.Label(login_tab, text="Sign In Portal", font=("Arial", 18, "bold"), bg="#f0f0f0")
+    login_title.pack(pady=40)
+
+    l_user_frame = tk.Frame(login_tab, bg="#f0f0f0")
+    l_user_frame.pack(pady=15)
+    l_user_label = tk.Label(l_user_frame, text="Username: ", font=("Arial", 11), bg="#f0f0f0", width=10, anchor="w")
+    l_user_label.pack(side=tk.LEFT)
+    login_username_entry = tk.Entry(l_user_frame, font=("Arial", 11), width=22)
+    login_username_entry.pack(side=tk.LEFT)
+
+    l_pass_frame = tk.Frame(login_tab, bg="#f0f0f0")
+    l_pass_frame.pack(pady=15)
+    l_pass_label = tk.Label(l_pass_frame, text="Password: ", font=("Arial", 11), bg="#f0f0f0", width=10, anchor="w")
+    l_pass_label.pack(side=tk.LEFT)
+    login_password_entry = tk.Entry(l_pass_frame, font=("Arial", 11), width=22, show="*")
+    login_password_entry.pack(side=tk.LEFT)
+
+    login_button = tk.Button(
